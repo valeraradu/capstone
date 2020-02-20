@@ -2,7 +2,6 @@ package observatory
 
 import com.sksamuel.scrimage.{Image, Pixel}
 import observatory.util.DistanceCalculatorImpl
-import org.apache.commons.math3.ml.distance.DistanceMeasure
 
 /**
   * 2nd milestone: basic visualization
@@ -26,18 +25,33 @@ object Visualization extends VisualizationInterface {
       return weighted_values_sum / sum_of_weights
   */
   def predictTemperature(temperatures: Iterable[(Location, Temperature)], location: Location): Temperature = {
-    val p = 2
-    val temps =
-      temperatures.map(temp => (DistanceCalculatorImpl.calculateDistanceInKilometer(location, temp._1), temp._2))
 
-    temps.find(temp => temp._1 <= 1).getOrElse({
-      val (sum, weights) = temps.foldLeft((0.0, 0.0))((agg, temp) => {
-        val weight = Math.pow(temp._1, -p)
-        (agg._1 + weight, agg._2 + weight * temp._2)
+      def isCloseEnough(loc: Location): Boolean  = {
+
+        val lonDiff = math.abs(loc.lon - location.lon)
+
+        math.abs(loc.lat - location.lat) < 22 && //roughly Latitude: 1 deg = 110.574 km
+        (if (lonDiff > 180) 180 - lonDiff%180 else lonDiff)*
+          (111.32*math.cos(math.toRadians(location.lat))) < 2500 //Longitude: 1 deg = 111.320*cos(latitude) km
       }
-    )
-      (0.0, weights/sum)
-    })._2
+
+      val temps =
+        temperatures
+          .filter(f => isCloseEnough(f._1))
+          .map(temp => (DistanceCalculatorImpl.calculateDistanceInKilometer(location, temp._1), temp._2))
+
+      val p = 6
+      val predicted = temps.find(temp => temp._1 <= 1).getOrElse({
+        val (sum, weights) = temps.foldLeft((0.0, 0.0))((agg, temp) => {
+          val weight = Math.pow(temp._1, -p)
+          (agg._1 + weight, agg._2 + weight * temp._2)
+        }
+        )
+        (0.0, weights/sum)
+      })._2
+
+    predicted
+
   }
 
   /**
@@ -81,8 +95,8 @@ object Visualization extends VisualizationInterface {
   def visualize(temperatures: Iterable[(Location, Temperature)], colors: Iterable[(Temperature, Color)]): Image = {
 
     val pixels = for {
-      x <- 0 to 359
       y <- 0 to 179
+      x <- 0 to 359
     } yield {
       val color = interpolateColor(colors, predictTemperature(temperatures, DistanceCalculatorImpl.coordToGeo(x, y)))
         Pixel(color.red, color.green, color.blue, 127)
@@ -90,6 +104,13 @@ object Visualization extends VisualizationInterface {
 
     Image(360, 180, pixels.toArray)
 
+  }
+
+  def defXYtoLatLong(x: Int, y: Int): Location = {
+    import scala.math._
+
+    Location(toDegrees(atan(sinh(Pi * (1.0 - 2.0 * y.toDouble /0)))),
+    x.toDouble / 1* 360.0 - 180.0)
   }
 
 }
