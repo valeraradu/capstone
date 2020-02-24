@@ -9,6 +9,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.math._
+import collection.JavaConverters._
 
 /**
   * 3rd milestone: interactive visualization
@@ -49,16 +50,32 @@ object Interaction extends InteractionInterface {
       val location = tileLocation(Tile(x, y, tile.zoom + 8))
 
       //pixelHashes.getOrDefault(location, {
-      val color = interpolateColor(colors, predictTemperature(temperatures, location))
+      //val color = interpolateColor(colors, predictTemperature(temperatures, location))
       //val pixel =
-      Pixel(color.red, color.green, color.blue, 127)
+
+      //Pixel(color.red, color.green, color.blue, 127)
       //if (tile.zoom < 3) pixelHashes.put(location, pixel)
       //pixel
       //})
+      val temp = predictTemperature(temperatures, location) + 100
+      Pixel(math.floor(temp).toInt, ((temp - math.floor(temp)) * 200).toInt, 0, 127)
 
     }
 
     Image(256, 256, pixels.toArray)
+  }
+
+  def tileRaw(temperatures: Iterable[(Location, Temperature)], tile: Tile): List[Double] = {
+
+    val temps = for {
+      y <- tile.y * 256 to tile.y * 256 + 255
+      x <- tile.x * 256 to tile.x * 256 + 255
+    } yield {
+      predictTemperature(temperatures, tileLocation(Tile(x, y, tile.zoom + 8)))
+    }
+
+    temps.toList
+
   }
 
   def zoomTile(tile: Tile, depth: Int): Seq[Tile] = {
@@ -82,11 +99,11 @@ object Interaction extends InteractionInterface {
     * @param generateImage Function that generates an image given a year, a zoom level, the x and
     *                      y coordinates of the tile and the data to build the image from
     *
-    *                      This method generates all the tiles for a given dataset yearlyData, for zoom levels 0 to 3 (included).
-    *                      The dataset contains pairs of (Year, Data) values, or, said otherwise, data associated with years. In your case,
-    *                      this data will be the result of Extraction.locationYearlyAverageRecords. The second parameter of the generateTiles
-    *                      method is a function that takes a year, the coordinates of the tile to generate, and the data associated with the
-    *                      year, and computes the tile and writes it on your filesystem.
+    *  This method generates all the tiles for a given dataset yearlyData, for zoom levels 0 to 3 (included).
+    *  The dataset contains pairs of (Year, Data) values, or, said otherwise, data associated with years. In your case,
+    *  this data will be the result of Extraction.locationYearlyAverageRecords. The second parameter of the generateTiles
+    *  method is a function that takes a year, the coordinates of the tile to generate, and the data associated with the
+    *  year, and computes the tile and writes it on your filesystem.
     */
   def generateTiles[Data](
                            yearlyData: Iterable[(Year, Data)],
@@ -96,12 +113,7 @@ object Interaction extends InteractionInterface {
 
       val t1 = System.currentTimeMillis / 1000
 
-      val tray = new ConcurrentHashMap[Tile, Tile]()
-
-      (Tile(0, 0, 0) +: zoomTile(Tile(0, 0, 0), 3)).map(tail => {
-          tray.put(tail, tail)
-      })
-
+      val tray = generateTasks(3)
 
       val threads = (0 to 7).map(thread =>
         Future {
@@ -125,37 +137,13 @@ object Interaction extends InteractionInterface {
       val elapsed_h = (elapsed_s / 60 / 60)
       println("elapsed time for year  " + data._1 + " " + "%02d:%02d:%02d".format(elapsed_h, residual_m, residual_s))
 
-    })
+    }
 
   }
+
+  def generateTasks(zoom: Int): ConcurrentHashMap[Tile, Tile] = {
+    val tray = new ConcurrentHashMap[Tile, Tile]()
+    tray.putAll((Tile(0, 0, 0) +: zoomTile(Tile(0, 0, 0), 3)).filter(tile => tile.zoom >=zoom ).map(tail => (tail, tail)).toMap.asJava)
+    tray
+  }
 }
-
-/*yearlyData.foreach(data => {
-(Tile(0,0,0) +: zoomTile(Tile(0,0,0), 3)).groupBy(t => t.zoom).toList.sortBy(_._1)
-.foreach(zoom => {
-println("starting computing zoom " + zoom._1)
-println("tiles for zoom " + zoom._1 + " " + zoom._2)
-val t1 = System.currentTimeMillis/1000
-
-val slide = if( zoom._2.size <= 4) 1 else zoom._2.size/8
-
-val threads =
-zoom._2.sliding(slide, slide).map(group => Future {
-println("thread started for tiles " + group.toList)
-group.foreach(tile => generateImage(data._1, tile, data._2))
-})
-
-
-val all = Future.sequence(threads)
-
-Await.result(all, Duration.Inf)
-
-val elapsed_s = (System.currentTimeMillis/1000 - t1)
-val residual_s = elapsed_s % 60
-val residual_m = (elapsed_s/60) % 60
-val elapsed_h = (elapsed_s/60/60)
-println("elapsed time for zoom  " + zoom._1 + " "  + "%02d:%02d:%02d".format(elapsed_h, residual_m,
-residual_s))
-})
-})*/
-

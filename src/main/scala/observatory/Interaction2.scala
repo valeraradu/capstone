@@ -27,8 +27,9 @@ object Interaction2 extends Interaction2Interface {
                           (-7.0, Color(0,0,255))
     )
     Seq(Layer(Temperatures, colorScheme, Range(1975, 2016)),
-      Layer(Deviations, colorScheme, Range(1975, 2016)))
+      Layer(Deviations, colorScheme, Range(1990, 2016)))
   }
+
 
   /**
     * @param selectedLayer A signal carrying the layer selected by the user
