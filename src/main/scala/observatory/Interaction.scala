@@ -137,7 +137,7 @@ object Interaction extends InteractionInterface {
       val elapsed_h = (elapsed_s / 60 / 60)
       println("elapsed time for year  " + data._1 + " " + "%02d:%02d:%02d".format(elapsed_h, residual_m, residual_s))
 
-    }
+    })
 
   }
 
